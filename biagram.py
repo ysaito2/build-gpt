@@ -11,9 +11,12 @@ eval_interval = 300
 learning_rate = 1e-2
 device = 'cuda' if torch.cuda.is_available() else 'mps' if torch.backends.mps.is_available() else 'cpu'
 eval_iters = 200
+n_emb = 32
+vocab_size = 27
 
 print('='*40)
 print('Hyperparameters:')
+print('='*40)
 print(f'  batch_size: {batch_size}')
 print(f'  block_size: {block_size}')
 print(f'  max_iters: {max_iters}')
@@ -21,6 +24,8 @@ print(f'  eval_interval: {eval_interval}')
 print(f'  learning_rate: {learning_rate}')
 print(f'  eval_iters: {eval_iters}')
 print(f"  Using device: {device}")
+print(f'  n_emb: {n_emb}')
+print(f'  vocab_size: {vocab_size}')
 print('='*40)
 #--------------------------------
 # data
@@ -54,13 +59,19 @@ def get_batch(split):
 class BigramLanguageModel(nn.Module):
     """A simple bigram language model that predicts the next character based on the current character."""
     
-    def __init__(self, vocab_size):
+    def __init__(self):
         super().__init__()
-        self.token_embedding_table = nn.Embedding(vocab_size, vocab_size)
+        self.token_embedding_table = nn.Embedding(vocab_size, n_emb)
+        self.position_embedding_table = nn.Embedding(block_size, n_emb)
+        self.lm_head = nn.Linear(n_emb, vocab_size) 
 
     def forward(self, idx, targets=None):
         # idx and targets are both (B,T) tensor of integers
-        logits = self.token_embedding_table(idx) # (B,T,C)
+        B, T = idx.shape
+        tok_embd = self.token_embedding_table(idx) # (B,T,C)
+        pos_embd = self.position_embedding_table(torch.arange(T, device=device)) # (T,C)
+        x = tok_embd + pos_embd
+        logits = self.lm_head(x) # (B,T,vocab_size)
         
         if targets is None:
             loss = None
@@ -140,7 +151,7 @@ def generate_text(model, max_new_tokens=300):
 
 #--------------------------------
 # test
-model = BigramLanguageModel(vocab_size=len(chars))
+model = BigramLanguageModel()
 m = model.to(device)
 train_model(m)
 
